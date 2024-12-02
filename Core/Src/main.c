@@ -69,14 +69,16 @@ void scanI2C();
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-// Overwrites the __io_putchar function in syscalls.c to use SWO for printf
-// __io_putchar is called by printf to print characters to the console
+/// @brief Overwrites the __io_putchar function in syscalls.c to use SWO for
+/// printf  __io_putchar is called by printf to print characters to the console
 int __io_putchar(int ch) {
   // Write character to ITM ch.0
   ITM_SendChar(ch);
   return (ch);
 }
 
+/// @brief Scan the I2C bus for devices. Prints out the addresses of devices
+/// that respond.
 void scanI2C(void) {
   for (uint8_t i = 0; i < 128; i++) {
     uint8_t ret = HAL_I2C_IsDeviceReady(&hi2c1, i, 1, 100);
@@ -90,34 +92,45 @@ void scanI2C(void) {
   }
 }
 
+/// @brief Read the temperature from LIS2DW12. See datasheet p35
+/// @param
 void I2C1_read_temperature(void) {
+  // From documentation:
   // The temperature is available in OUT_T_L (0Dh), OUT_T_H (0Eh) stored as
-  // two's complement data, left-justified in 12-bit mode and in OUT_T (26h)
-  // stored as two's complement data, left-justified in 8-bit mode.
+  // two's complement data, left-justified in 12-bit mode
   uint8_t data[2];
-  // OUTL is 0Dh, OUTH is 0Eh
   HAL_I2C_Mem_Read(&hi2c1, 0x30, 0x0D, I2C_MEMADD_SIZE_8BIT, data, 2, 100);
   int16_t temp_raw = (int16_t)((data[1] << 8) | data[0]);
   temp_raw >>= 4; // 12 bit value, so shifted right by 4
   float temperature = 25 + temp_raw / 16.0;
-  int integerPart = (int)temperature;
-  int fractionalPart =
-      (int)((temperature - integerPart) * 100); // For 2 decimal places
+  // NO SUPPORT FOR FLOATING POINT IN PRINTF ENABLED
+  uint16_t integerPart = (uint16_t)temperature;
+  uint16_t fractionalPart =
+      (uint16_t)((temperature - integerPart) * 100); // For 2 decimal places
   printf("Temperature: %d.%02d C\n", integerPart, fractionalPart);
 }
 
+/// @brief Read the WHOAMI register of the LIS2DW12. Should always return 0x44.
+/// See datasheet p35
+/// @param
 void I2C1_read_whoami(void) {
   uint8_t data;
   HAL_I2C_Mem_Read(&hi2c1, 0x30, 0x0F, I2C_MEMADD_SIZE_8BIT, &data, 1, 100);
   printf("WHOAMI: 0x%02X\n", data);
 }
 
+/// @brief Setup the CTRL1 register of the LIS2DW12 to enable the accelerometer.
+/// Set up: 0111 400Hz, 01 high performance mode, 00 LP-Mode 12 Bit resolution
+/// (not needed). See datasheet p36
+/// @param
 void I2C1_setup_ctrl1(void) {
   // to register 20h, write 0b0111 01 00
   HAL_I2C_Mem_Write(&hi2c1, 0x30, 0x20, I2C_MEMADD_SIZE_8BIT, (uint8_t *)"\x74",
                     1, 100);
 }
 
+/// @brief Read the CTRL1 register of the LIS2DW12, in order for the user to
+/// verify it is set up correctly
 void I2C1_read_ctrl1(void) {
   uint8_t data;
   HAL_I2C_Mem_Read(&hi2c1, 0x30, 0x20, I2C_MEMADD_SIZE_8BIT, &data, 1, 100);
@@ -129,8 +142,11 @@ typedef struct {
   int16_t z;
 } xyz_t;
 
+/// @brief Read the X, Y, Z values from the LIS2DW12. See datasheet p43/44
+/// @return xyz_t struct containing the raw X, Y, Z values
 xyz_t I2C1_read_xyz(void) {
   uint8_t data[6];
+  // Read from 0x28 to 0x2D
   HAL_I2C_Mem_Read(&hi2c1, 0x30, 0x28, I2C_MEMADD_SIZE_8BIT, data, 6, 100);
   int16_t x = (int16_t)((data[1] << 8) | data[0]);
   int16_t y = (int16_t)((data[3] << 8) | data[2]);
@@ -139,16 +155,22 @@ xyz_t I2C1_read_xyz(void) {
   return (xyz_t){x, y, z};
 }
 
+/// @brief Set the state of the red LED
+/// @param state GPIO_PIN_SET or GPIO_PIN_RESET
 void red_led_state(uint8_t state) {
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, state);
 }
 
-void green_led_state(uint8_t state) {
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, state);
-}
-
+/// @brief Set the state of the yellow LED
+/// @param state GPIO_PIN_SET or GPIO_PIN_RESET
 void yellow_led_state(uint8_t state) {
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, state);
+}
+
+/// @brief Set the state of the green LED
+/// @param state GPIO_PIN_SET or GPIO_PIN_RESET
+void green_led_state(uint8_t state) {
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, state);
 }
 /* USER CODE END 0 */
 
