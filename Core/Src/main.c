@@ -77,7 +77,7 @@ int __io_putchar(int ch) {
   return (ch);
 }
 
-void scanI2C() {
+void scanI2C(void) {
   for (uint8_t i = 0; i < 128; i++) {
     uint8_t ret = HAL_I2C_IsDeviceReady(&hi2c1, i, 1, 100);
     if (ret == HAL_OK) {
@@ -88,6 +88,67 @@ void scanI2C() {
       printf("I2C device ready: I2C2: 0x%02X\n", i);
     }
   }
+}
+
+void I2C1_read_temperature(void) {
+  // The temperature is available in OUT_T_L (0Dh), OUT_T_H (0Eh) stored as
+  // two's complement data, left-justified in 12-bit mode and in OUT_T (26h)
+  // stored as two's complement data, left-justified in 8-bit mode.
+  uint8_t data[2];
+  // OUTL is 0Dh, OUTH is 0Eh
+  HAL_I2C_Mem_Read(&hi2c1, 0x30, 0x0D, I2C_MEMADD_SIZE_8BIT, data, 2, 100);
+  int16_t temp_raw = (int16_t)((data[1] << 8) | data[0]);
+  temp_raw >>= 4; // 12 bit value, so shifted right by 4
+  float temperature = 25 + temp_raw / 16.0;
+  int integerPart = (int)temperature;
+  int fractionalPart =
+      (int)((temperature - integerPart) * 100); // For 2 decimal places
+  printf("Temperature: %d.%02d C\n", integerPart, fractionalPart);
+}
+
+void I2C1_read_whoami(void) {
+  uint8_t data;
+  HAL_I2C_Mem_Read(&hi2c1, 0x30, 0x0F, I2C_MEMADD_SIZE_8BIT, &data, 1, 100);
+  printf("WHOAMI: 0x%02X\n", data);
+}
+
+void I2C1_setup_ctrl1(void) {
+  // to register 20h, write 0b0111 01 00
+  HAL_I2C_Mem_Write(&hi2c1, 0x30, 0x20, I2C_MEMADD_SIZE_8BIT, (uint8_t *)"\x74",
+                    1, 100);
+}
+
+void I2C1_read_ctrl1(void) {
+  uint8_t data;
+  HAL_I2C_Mem_Read(&hi2c1, 0x30, 0x20, I2C_MEMADD_SIZE_8BIT, &data, 1, 100);
+  printf("CTRL1: 0x%02X\n", data);
+}
+typedef struct {
+  int16_t x;
+  int16_t y;
+  int16_t z;
+} xyz_t;
+
+xyz_t I2C1_read_xyz(void) {
+  uint8_t data[6];
+  HAL_I2C_Mem_Read(&hi2c1, 0x30, 0x28, I2C_MEMADD_SIZE_8BIT, data, 6, 100);
+  int16_t x = (int16_t)((data[1] << 8) | data[0]);
+  int16_t y = (int16_t)((data[3] << 8) | data[2]);
+  int16_t z = (int16_t)((data[5] << 8) | data[4]);
+  printf("X: %d, Y: %d, Z: %d\n", x, y, z);
+  return (xyz_t){x, y, z};
+}
+
+void red_led_state(uint8_t state) {
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, state);
+}
+
+void green_led_state(uint8_t state) {
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, state);
+}
+
+void yellow_led_state(uint8_t state) {
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, state);
 }
 /* USER CODE END 0 */
 
@@ -128,6 +189,7 @@ int main(void) {
   MX_USB_PCD_Init();
   /* USER CODE BEGIN 2 */
   uint32_t count = 0;
+  I2C1_setup_ctrl1();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -136,20 +198,30 @@ int main(void) {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
-    printf("Hello from ARES PARACHUTE BOARD! Loop count: %i\n", count);
+    if (count % 100 == 0) {
+      printf("Hello from ARES PARACHUTE BOARD! Loop count: %lu\n", count);
+      I2C1_read_temperature();
+    }
+    if (count % 10 == 0) {
+      xyz_t results = I2C1_read_xyz();
+      if (results.x > 10000) {
+        red_led_state(GPIO_PIN_SET);
+      } else {
+        red_led_state(GPIO_PIN_RESET);
+      }
+      if (results.y > 10000) {
+        green_led_state(GPIO_PIN_SET);
+      } else {
+        green_led_state(GPIO_PIN_RESET);
+      }
+      if (results.z > 10000) {
+        yellow_led_state(GPIO_PIN_SET);
+      } else {
+        yellow_led_state(GPIO_PIN_RESET);
+      }
+    }
+    HAL_Delay(10);
     count++;
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_SET);
-    HAL_Delay(50);
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);
-    HAL_Delay(50);
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
-    HAL_Delay(1000);
-
-    // HAL_I2C_Master_Transmit(&hi2c1, 0x18, (uint8_t *)"Hello", 5, 100);
-    // scan all I2C addresses from 0 to 128
-    scanI2C();
   }
   /* USER CODE END 3 */
 }
@@ -410,7 +482,8 @@ static void MX_GPIO_Init(void) {
  */
 void Error_Handler(void) {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
+  /* User can add his own implementation to report the HAL error return state
+   */
   __disable_irq();
   while (1) {
   }
@@ -428,8 +501,8 @@ void Error_Handler(void) {
 void assert_failed(uint8_t *file, uint32_t line) {
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line
-     number, ex: printf("Wrong parameters value: file %s on line %d\r\n", file,
-     line) */
+     number, ex: printf("Wrong parameters value: file %s on line %d\r\n",
+     file, line) */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
