@@ -1,9 +1,11 @@
 # ARES Parachute Board FW Repo
 
+![Schema Board](docs/schematic.png)
 # TODO
 - Wie fügt man source files hinzu?
 - Wie konfiguriert man andere Debugprobes?
 - Was macht das Demoprogramm?
+
 
 ## Projektstruktur
 Das Projekt ist Standard, wie von STMCubeMX vorgesehen, aufgesetzt, mit CMake als build.
