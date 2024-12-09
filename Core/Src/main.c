@@ -172,8 +172,34 @@ void yellow_led_state(uint8_t state) {
 void green_led_state(uint8_t state) {
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, state);
 }
+
+/// @brief Initialize the SPI flash memory
+void SPI_flash_init(
+    void) { // TODO: UNTESTED, DOESN'T WORK YET - SPI FLASH NEEDS CS PIN!!!
+  uint8_t initCommands[] = {0x06}; // Example command to wake up the flash
+  HAL_SPI_Transmit(&hspi1, initCommands, sizeof(initCommands), 100);
+}
+/// @brief Write "Hello World" to the external SPI flash and then read it back
+/// and print what it read
+void SPI_flash_write_read(
+    void) { // TODO: UNTESTED, DOESN'T WORK YET - SPI FLASH NEEDS CS PIN!!!
+  uint8_t writeData[] = "Hello World";
+  uint8_t readData[12] = {0};
+
+  // Assuming the flash memory is already initialized and ready to use
+  // Write "Hello World" to address 0x0000
+  HAL_SPI_Transmit(&hspi1, writeData, sizeof(writeData), 100);
+
+  // Read back the data from address 0x0000
+  HAL_SPI_Receive(&hspi1, readData, sizeof(readData), 100);
+
+  // Print the read data
+  printf("Read from SPI flash: %s\n", readData);
+}
 /* USER CODE END 0 */
 
+#define ENABLE_ACCEL_LED 1
+#define ENABLE_TEMP 1
 /**
  * @brief  The application entry point.
  * @retval int
@@ -212,36 +238,40 @@ int main(void) {
   /* USER CODE BEGIN 2 */
   uint32_t count = 0;
   I2C1_setup_ctrl1();
+  SPI_flash_init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1) {
-    /* USER CODE END WHILE */
+/* USER CODE END WHILE */
 
-    /* USER CODE BEGIN 3 */
+/* USER CODE BEGIN 3 */
+#if ENABLE_TEMP
     if (count % 100 == 0) {
-      printf("Hello from ARES PARACHUTE BOARD! Loop count: %lu\n", count);
       I2C1_read_temperature();
     }
-    if (count % 10 == 0) {
-      xyz_t results = I2C1_read_xyz();
-      if (results.x > 10000) {
-        red_led_state(GPIO_PIN_SET);
-      } else {
-        red_led_state(GPIO_PIN_RESET);
-      }
-      if (results.y > 10000) {
-        green_led_state(GPIO_PIN_SET);
-      } else {
-        green_led_state(GPIO_PIN_RESET);
-      }
-      if (results.z > 10000) {
-        yellow_led_state(GPIO_PIN_SET);
-      } else {
-        yellow_led_state(GPIO_PIN_RESET);
-      }
+#endif
+#if ENABLE_ACCEL_LED
+    // if (count % 10 == 0) {
+    xyz_t results = I2C1_read_xyz();
+    if (results.x > 10000) {
+      red_led_state(GPIO_PIN_SET);
+    } else {
+      red_led_state(GPIO_PIN_RESET);
     }
+    if (results.y > 10000) {
+      green_led_state(GPIO_PIN_SET);
+    } else {
+      green_led_state(GPIO_PIN_RESET);
+    }
+    if (results.z > 10000) {
+      yellow_led_state(GPIO_PIN_SET);
+    } else {
+      yellow_led_state(GPIO_PIN_RESET);
+    }
+    // }
+#endif
     HAL_Delay(10);
     count++;
   }
