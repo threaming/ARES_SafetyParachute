@@ -31,7 +31,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define ENABLE_ACCEL_LED 1
+#define ENABLE_TEMP 1
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -197,9 +198,6 @@ void SPI_flash_write_read(
   printf("Read from SPI flash: %s\n", readData);
 }
 /* USER CODE END 0 */
-
-#define ENABLE_ACCEL_LED 1
-#define ENABLE_TEMP 1
 /**
  * @brief  The application entry point.
  * @retval int
@@ -244,9 +242,9 @@ int main(void) {
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1) {
-/* USER CODE END WHILE */
+    /* USER CODE END WHILE */
 
-/* USER CODE BEGIN 3 */
+    /* USER CODE BEGIN 3 */
 #if ENABLE_TEMP
     if (count % 100 == 0) {
       I2C1_read_temperature();
@@ -261,14 +259,14 @@ int main(void) {
       red_led_state(GPIO_PIN_RESET);
     }
     if (results.y > 10000) {
-      green_led_state(GPIO_PIN_SET);
-    } else {
-      green_led_state(GPIO_PIN_RESET);
-    }
-    if (results.z > 10000) {
       yellow_led_state(GPIO_PIN_SET);
     } else {
       yellow_led_state(GPIO_PIN_RESET);
+    }
+    if (results.z > 10000) {
+      green_led_state(GPIO_PIN_SET);
+    } else {
+      green_led_state(GPIO_PIN_RESET);
     }
     // }
 #endif
@@ -486,7 +484,6 @@ static void MX_GPIO_Init(void) {
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
