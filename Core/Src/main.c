@@ -43,6 +43,7 @@
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
 I2C_HandleTypeDef hi2c2;
+uint8_t active_i2c;
 
 SPI_HandleTypeDef hspi1;
 
@@ -126,9 +127,10 @@ void I2C1_read_whoami(void) {
 /// @param
 void I2C1_setup_ctrl1(void) {
   // to register 20h, write 0b0111 01 00
-  HAL_I2C_Mem_Write(&hi2c1, 0x30, 0x20, I2C_MEMADD_SIZE_8BIT, (uint8_t *)"\x74",
-                    1, 100);
+  HAL_I2C_Mem_Write(&hi2c1, 0x30, 0x20, I2C_MEMADD_SIZE_8BIT, (uint8_t *)"\x74", 1, 100);
+  HAL_I2C_Mem_Write(&hi2c2, 0x30, 0x20, I2C_MEMADD_SIZE_8BIT, (uint8_t *)"\x74", 1, 100);
 }
+
 
 /// @brief Read the CTRL1 register of the LIS2DW12, in order for the user to
 /// verify it is set up correctly
@@ -148,7 +150,20 @@ typedef struct {
 xyz_t I2C1_read_xyz(void) {
   uint8_t data[6];
   // Read from 0x28 to 0x2D
-  HAL_I2C_Mem_Read(&hi2c1, 0x30, 0x28, I2C_MEMADD_SIZE_8BIT, data, 6, 100);
+  if (active_i2c == 1){
+    uint8_t ret = HAL_I2C_Mem_Read(&hi2c1, 0x30, 0x28, I2C_MEMADD_SIZE_8BIT, data, 6, 100);
+    if (ret != HAL_OK){
+      active_i2c = 2;
+      MX_I2C2_Init();
+    }
+  }
+  if (active_i2c == 2){
+    uint8_t ret = HAL_I2C_Mem_Read(&hi2c2, 0x30, 0x28, I2C_MEMADD_SIZE_8BIT, data, 6, 100);
+    if (ret != HAL_OK){
+      active_i2c = 1;
+      MX_I2C1_Init();
+    }
+  }
   int16_t x = (int16_t)((data[1] << 8) | data[0]);
   int16_t y = (int16_t)((data[3] << 8) | data[2]);
   int16_t z = (int16_t)((data[5] << 8) | data[4]);
@@ -236,6 +251,7 @@ int main(void) {
   /* USER CODE BEGIN 2 */
   uint32_t count = 0;
   I2C1_setup_ctrl1();
+  active_i2c = 1;
   SPI_flash_init();
   /* USER CODE END 2 */
 
