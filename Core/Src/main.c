@@ -22,10 +22,17 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include <math.h>
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+enum states_e {
+  NORMAL,
+  FREE_FALL,
+  TRIGGERED
+};
 
 /* USER CODE END PTD */
 
@@ -33,6 +40,9 @@
 /* USER CODE BEGIN PD */
 #define ENABLE_ACCEL_LED 1
 #define ENABLE_TEMP 1
+
+#define FREE_FALL_THRESH 10000000
+#define TRIGGER_TIMEOUT 50   // *10 ms
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -174,7 +184,7 @@ xyz_t I2C1_read_xyz(void) {
 /// @brief Set the state of the red LED
 /// @param state GPIO_PIN_SET or GPIO_PIN_RESET
 void red_led_state(uint8_t state) {
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, state);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, state);
 }
 
 /// @brief Set the state of the yellow LED
@@ -186,7 +196,15 @@ void yellow_led_state(uint8_t state) {
 /// @brief Set the state of the green LED
 /// @param state GPIO_PIN_SET or GPIO_PIN_RESET
 void green_led_state(uint8_t state) {
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0, state);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, state);
+}
+
+/// @brief Set the state of the trigger
+/// @param state GPIO_PIN_SET or GPIO_PIN_RESET
+void trigger_state(uint8_t state) {
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, state);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, state);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, state);
 }
 
 /// @brief Initialize the SPI flash memory
@@ -253,6 +271,14 @@ int main(void) {
   I2C1_setup_ctrl1();
   active_i2c = 1;
   SPI_flash_init();
+  enum states_e state = NORMAL;
+  uint8_t free_fall_time = 0;
+  xyz_t results;
+  uint64_t accl_abs;
+  trigger_state(GPIO_PIN_RESET);
+  green_led_state(GPIO_PIN_SET);
+  yellow_led_state(GPIO_PIN_RESET);
+  red_led_state(GPIO_PIN_RESET);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -268,21 +294,42 @@ int main(void) {
 #endif
 #if ENABLE_ACCEL_LED
     // if (count % 10 == 0) {
-    xyz_t results = I2C1_read_xyz();
-    if (results.x > 10000) {
-      red_led_state(GPIO_PIN_SET);
-    } else {
-      red_led_state(GPIO_PIN_RESET);
-    }
-    if (results.y > 10000) {
-      yellow_led_state(GPIO_PIN_SET);
-    } else {
-      yellow_led_state(GPIO_PIN_RESET);
-    }
-    if (results.z > 10000) {
-      green_led_state(GPIO_PIN_SET);
-    } else {
-      green_led_state(GPIO_PIN_RESET);
+    switch(state) {
+      case NORMAL:
+        results = I2C1_read_xyz();
+        accl_abs = pow(results.x,2) + pow(results.y,2) + pow(results.z,2);
+        if (accl_abs < FREE_FALL_THRESH) {
+          state = FREE_FALL;
+          green_led_state(GPIO_PIN_RESET);
+          yellow_led_state(GPIO_PIN_SET);
+        }
+        break;
+
+      case FREE_FALL:
+        free_fall_time ++;
+        results = I2C1_read_xyz();
+        accl_abs = pow(results.x,2) + pow(results.y,2) + pow(results.z,2);
+        if (accl_abs >= FREE_FALL_THRESH) {
+          state = NORMAL;
+          free_fall_time = 0;
+          yellow_led_state(GPIO_PIN_RESET);
+          green_led_state(GPIO_PIN_SET);
+        }
+        if (free_fall_time > TRIGGER_TIMEOUT) {
+          state = TRIGGERED;
+          green_led_state(GPIO_PIN_RESET);
+          yellow_led_state(GPIO_PIN_RESET);
+          red_led_state(GPIO_PIN_SET);
+          trigger_state(GPIO_PIN_SET);
+        }
+        break;
+
+      case TRIGGERED:
+        break;
+
+      default:
+        state = NORMAL;
+        break;
     }
     // }
 #endif
